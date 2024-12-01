@@ -9,11 +9,10 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "agora-rtc-react": "^2.3.0",
     "agora-rtc-sdk-ng": "^4.22.2",
     "next": "15.0.3",
-    "react": "19.0.0-rc-66855b96-20241106",
-    "react-dom": "19.0.0-rc-66855b96-20241106"
+    "react": "^18",
+    "react-dom": "^18"
   },
   "devDependencies": {
     "eslint": "^8",
