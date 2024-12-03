@@ -1,6 +1,10 @@
-'use client'
+'use client';
 import { useRef, useState, useEffect } from "react";
-import AgoraRTC from "agora-rtc-sdk-ng";
+
+let AgoraRTC = null;
+if (typeof window !== "undefined") {
+  AgoraRTC = require("agora-rtc-sdk-ng");
+}
 
 export default function Home() {
   const APP_ID = "4d69db44bde34c09a76dd24e382261e2";
@@ -19,14 +23,20 @@ export default function Home() {
   const localPlayerRef = useRef(null);
 
   const joinChannel = async () => {
+    if (!AgoraRTC) return;
+
     try {
       const agoraClient = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
       await agoraClient.join(APP_ID, CHANNEL, TOKEN, RTCUID);
       setClient(agoraClient);
 
-      // Crear pistas de audio y video locales
+      // Crear pistas de audio y video locales con cancelación de eco
       const videoTrack = await AgoraRTC.createCameraVideoTrack();
-      const audioTrack = await AgoraRTC.createMicrophoneAudioTrack();
+      const audioTrack = await AgoraRTC.createMicrophoneAudioTrack({
+        AEC: true, // Cancelación de eco
+        AGC: true, // Control automático de ganancia
+        ANS: true, // Supresión de ruido
+      });
 
       setLocalVideoTrack(videoTrack);
       setLocalAudioTrack(audioTrack);
@@ -44,22 +54,20 @@ export default function Home() {
     if (!client) return;
 
     const handleUserPublished = async (user, mediaType) => {
-      setRemoteUsers((prevUsers) => {
-        if (!prevUsers.some((remoteUser) => remoteUser.uid === user.uid)) {
-          return [...prevUsers, { ...user, hasVideo: mediaType === "video" }];
-        }
-        return prevUsers.map((remoteUser) =>
-          remoteUser.uid === user.uid ? { ...remoteUser, hasVideo: mediaType === "video" } : remoteUser
-        );
-      });
-
       try {
         await client.subscribe(user, mediaType);
-        if (mediaType === "video" && user.videoTrack) {
-          const remoteVideoContainer = document.getElementById(`remote-video-${user.uid}`);
-          if (remoteVideoContainer) {
-            user.videoTrack.play(remoteVideoContainer);
+
+        setRemoteUsers((prevUsers) => {
+          if (!prevUsers.some((remoteUser) => remoteUser.uid === user.uid)) {
+            return [...prevUsers, { ...user, hasVideo: mediaType === "video" }];
           }
+          return prevUsers.map((remoteUser) =>
+            remoteUser.uid === user.uid ? { ...remoteUser, hasVideo: mediaType === "video" } : remoteUser
+          );
+        });
+
+        if (mediaType === "video" && user.videoTrack) {
+          user.videoTrack.play(document.getElementById(`remote-video-${user.uid}`));
         }
         if (mediaType === "audio" && user.audioTrack) {
           user.audioTrack.play();
@@ -82,6 +90,14 @@ export default function Home() {
 
     const handleUserLeft = (user) => {
       setRemoteUsers((prevUsers) => prevUsers.filter((remoteUser) => remoteUser.uid !== user.uid));
+      if (user.videoTrack) {
+        user.videoTrack.stop();
+        user.videoTrack.close();
+      }
+      if (user.audioTrack) {
+        user.audioTrack.stop();
+        user.audioTrack.close();
+      }
     };
 
     client.on("user-published", handleUserPublished);
